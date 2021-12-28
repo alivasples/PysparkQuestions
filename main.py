@@ -9,3 +9,4 @@ if __name__ == '__main__':
         .master(SPARK_MODE) \
         .getOrCreate()
     transformer = Transformer(spark)
+    transformer.transform()

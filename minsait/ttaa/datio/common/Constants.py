@@ -4,3 +4,5 @@ INFER_SCHEMA = "inferSchema"
 INPUT_PATH = "resources/data/players_21.csv"
 OUTPUT_PATH = "resources/data/output"
 OVERWRITE = "overwrite"
+FILTER_LOWER_AGE = 1
+FILTER_AGE = 23

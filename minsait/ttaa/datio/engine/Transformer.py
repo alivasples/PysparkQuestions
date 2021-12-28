@@ -11,10 +11,24 @@ class Transformer(Writer):
     def __init__(self, spark: SparkSession):
         self.spark: SparkSession = spark
         df: DataFrame = self.read_input()
-        df.printSchema()
         df = self.clean_data(df)
-        df = self.example_window_function(df)
+        self.df = df
+    
+    def transform(self):
+        ''' Transform the data according to requirements from excercises'''
+        df = self.df
+        df.printSchema()
+        # excercise 1
         df = self.column_selection(df)
+        # excercise 2
+        df = self.window_function(df)
+        # excercise 3
+        df = self.add_potential_vs_overall(df)
+        # excercise 4
+        df = self.filter_cat_pot_overall(df)
+        # excercise 5
+        if FILTER_LOWER_AGE == 1:
+            df = self.filter_lower_age(df, FILTER_AGE)
 
         # for show 100 records after your transformations and show the DataFrame schema
         df.show(n=100, truncate=False)
@@ -49,34 +63,75 @@ class Transformer(Writer):
     def column_selection(self, df: DataFrame) -> DataFrame:
         """
         :param df: is a DataFrame with players information
-        :return: a DataFrame with just 5 columns...
+        :return: a DataFrame with the columns described in excercices
         """
         df = df.select(
             short_name.column(),
-            overall.column(),
+            long_name.column(),
+            age.column(),
             height_cm.column(),
-            team_position.column(),
-            catHeightByPosition.column()
+            weight_kg.column(),
+            nationality.column(),
+            club_name.column(),
+            overall.column(),
+            potential.column(),
+            team_position.column()
         )
         return df
 
-    def example_window_function(self, df: DataFrame) -> DataFrame:
+    def window_function(self, df: DataFrame) -> DataFrame:
         """
-        :param df: is a DataFrame with players information (must have team_position and height_cm columns)
-        :return: add to the DataFrame the column "cat_height_by_position"
+        :param df: is a DataFrame with players information (must have nationality, 
+             team_position, and overall columns)
+        :return: add to the DataFrame the column "player_cat"
              by each position value
-             cat A for if is in 20 players tallest
-             cat B for if is in 50 players tallest
-             cat C for the rest
+             cat A for if is in top 3 players
+             cat B for if is in top 5 players
+             cat C for if is in top 10 players
+             cat D for the rest
         """
         w: WindowSpec = Window \
-            .partitionBy(team_position.column()) \
-            .orderBy(height_cm.column().desc())
+            .partitionBy(nationality.column(), team_position.column()) \
+            .orderBy(overall.column().desc())
         rank: Column = f.rank().over(w)
 
-        rule: Column = f.when(rank < 10, "A") \
-            .when(rank < 50, "B") \
-            .otherwise("C")
+        rule: Column = f.when(rank <= 3, "A") \
+            .when(rank <= 5, "B") \
+            .when(rank <= 10, "C") \
+            .otherwise("D")
 
-        df = df.withColumn(catHeightByPosition.name, rule)
+        df = df.withColumn(player_cat.name, rule)
+        return df
+
+
+    def add_potential_vs_overall(self, df: DataFrame) -> DataFrame:
+        """
+        :param df: is a DataFrame with players information (must have potential and overall columns)
+        :return: a DataFrame with potential_vs_overall column
+        """
+        df = df.withColumn(potential_vs_overall.name, 
+                           f.round(potential.column() / overall.column(), 3))
+        return df
+
+
+    def filter_cat_pot_overall(self, df: DataFrame) -> DataFrame:
+        """
+        :param df: is a DataFrame with players information (must have player_cat 
+             and potential_vs_overall columns)
+        :return: a DataFrame filtered according to Excercise 4
+        """
+        df = df.filter((player_cat.column() == "A") | (player_cat.column() == "B") 
+                       | ((player_cat.column() == "C") & (potential_vs_overall.column() > 1.15))
+                       | ((player_cat.column() == "D") & (potential_vs_overall.column() > 1.25))
+        )
+        return df
+
+
+    def filter_lower_age(self, df: DataFrame, limit_age: int) -> DataFrame:
+        """
+        :param df: is a DataFrame with players information (must have age column)
+        :param limit_age: is the limit age (exclusive)
+        :return: a DataFrame filtered with age lower than requested
+        """
+        df = df.filter(age.column() < limit_age)
         return df
